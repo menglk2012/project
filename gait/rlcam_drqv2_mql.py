@@ -23,7 +23,7 @@ import drqv2.utils as drqutils
 from drqv2.logger import Logger
 from drqv2.replay_buffer import ReplayBufferStorage, make_replay_loader
 import saver_utils
-from habitat_test import Runner, AsyncRunners, MultiSceneWrapper, make_async_runners, AestheticTourDMCWrapper
+from sim_env import Runner, AsyncRunners, make_async_runners, get_env_classes
 
 
 def make_agent(obs_spec, pos_spec, action_spec, cfg):
@@ -73,6 +73,7 @@ class Workspace:
         #     torch.backends.cudnn.benchmark = True
         self.device = torch.device(cfg.device)
         self.num_scenes = self.cfg.num_scenes
+        self.AestheticTourDMCWrapper, self.MultiSceneWrapper = get_env_classes(getattr(self.cfg, "simulator", "habitat-sim"))
         
         if self.evaluating:
             self.evaluation_setup()
@@ -158,7 +159,7 @@ class Workspace:
         )
         
         if not self.cfg.async_:
-            self.train_env = AestheticTourDMCWrapper(self.cfg)
+            self.train_env = self.AestheticTourDMCWrapper(self.cfg)
                 # self.max_episode, step_size=np.array(self.step_size), state_dim=self.cfg.state_dim,
                 # pose_dim=pose_dim, use_rotation=self.cfg.use_rotation,
                 # use_context=self.cfg.agent.use_context, hist_len=self.cfg.agent.context_history_length,
@@ -215,16 +216,11 @@ class Workspace:
         # create logger
         self.logger = Logger(self.work_dir, use_tb=self.cfg.use_tb)
         # create envs
-        if simulation == "blendertorch-gym":
+        simulator = getattr(self.cfg, "simulator", "habitat-sim")
+        if simulator == "blendertorch-gym":
             raise
-        elif simulation == "habitat-sim":
-            position_dim = 5 if self.cfg.use_rotation else 3
-            self.step_size = self.cfg.step_size[:position_dim]
-            self.evaluation_env = MultiSceneWrapper(
-                self.max_episode, max_timestep=self.cfg.max_timestep, step_size=np.array(self.step_size), state_dim=self.cfg.state_dim,
-                position_dim=position_dim, use_rotation=self.cfg.use_rotation,
-                use_context=self.cfg.agent.use_context, hist_len=self.cfg.agent.context_history_length,
-                uniform_sample=False, boundingbox_dir=self.cfg.boundingBox_dir, sceneList=self.cfg.sceneList, scene_index=self.cfg.scene_index)
+        else:
+            self.evaluation_env = self.MultiSceneWrapper(self.cfg)
         # create replay buffer
         data_specs = (
             self.evaluation_env.observation_spec,
