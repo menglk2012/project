@@ -38,6 +38,20 @@ Specifically, `ray` enables or disables multi-GPU training, `diversity, smoothne
 To train GAIT-DrQ-v2
 `$ bash drqtrain.sh`
 
+
+### Use UnrealZoo as simulator backend
+A lightweight UnrealZoo wrapper is provided in `unrealzoo_test.py` to follow the same reset/step output format as `habitat_test.py`.
+
+1. Ensure `../unrealzoo-gym` is available and UnrealCV dependencies are installed.
+2. In `cfgs/config.yaml`, set:
+   - `simulator: unrealzoo`
+   - `scene_name: <map_name>` (e.g. `MiddleEast`)
+   - optionally `unrealzoo_env_id` (default auto-constructed as `UnrealAgent-<scene_name>-ContinuousColor-v0`)
+3. Run training as usual: `bash drqtrain.sh`
+
+This backend focuses on interface compatibility for GAIT training loops (observation/pose/action/time-step pipeline).
+
+
 To train GAIT-CURL
 `$ bash curltrain.sh`
 
