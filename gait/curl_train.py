@@ -32,7 +32,7 @@ import drqv2.utils as drqutils
 from drqv2.logger import Logger
 from drqv2.replay_buffer import ReplayBufferStorage, make_replay_loader
 import saver_utils
-from habitat_test import MultiSceneWrapper, make_async_runners, AestheticTourDMCWrapper
+from sim_env import make_async_runners, get_env_classes
 
 
 class Args:
@@ -168,6 +168,7 @@ class Workspace:
         #     torch.backends.cudnn.benchmark = True
         self.device = torch.device(cfg.device)
         self.num_scenes = self.cfg.num_scenes
+        self.AestheticTourDMCWrapper, self.MultiSceneWrapper = get_env_classes(getattr(self.cfg, "simulator", "habitat-sim"))
 
         # create logger
         self.logger = Logger(self.work_dir, use_tb=self.cfg.use_tb)
@@ -189,7 +190,7 @@ class Workspace:
         )
 
         if not self.cfg.async_:
-            self.train_env = AestheticTourDMCWrapper(self.cfg)
+            self.train_env = self.AestheticTourDMCWrapper(self.cfg)
             self.eval_env = self.train_env  # let train and eval share env, reduce resources used
 
         # replay_storage will be created in each SubprocEnv

@@ -87,6 +87,12 @@ position_orientation_separate: True  # cant coexist with position_only_smoothnes
 #smoothness_radius_rot: 1.
 #zero_radius: 0.05
 
+
+# simulator backend
+simulator: habitat-sim  # options: habitat-sim, unrealzoo
+unrealzoo_env_id: null  # null -> auto build from scene_name, e.g. UnrealAgent-MiddleEast-ContinuousColor-v0
+unrealzoo_offscreen: true
+unrealzoo_gpu_id: null
 # habitat-sim
 camera_fov: 60
 gpu_aes_obs: True
