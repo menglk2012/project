@@ -5,6 +5,7 @@ from collections import deque
 import gym
 import numpy as np
 import torch
+import torch.nn.functional as F
 from dm_env import specs, StepType
 
 from aesthetics_model import AestheticsModel
@@ -116,6 +117,15 @@ class UnrealZooDMCWrapper:
             self.history_obs = deque(maxlen=self.hist_len)
             self.history_others = deque(maxlen=self.hist_len)
 
+    def _make_aes_tensor(self, aes_obs):
+        aes_obs = self.env._to_hwc_image(aes_obs)
+        aes_tensor = torch.from_numpy(aes_obs).float().unsqueeze(0).permute(0, 3, 1, 2) / 255.0
+        target_h = int(getattr(self.cfg, "aes_obs_height", aes_tensor.shape[-2]))
+        target_w = int(getattr(self.cfg, "aes_obs_width", aes_tensor.shape[-1]))
+        if aes_tensor.shape[-2] != target_h or aes_tensor.shape[-1] != target_w:
+            aes_tensor = F.interpolate(aes_tensor, size=(target_h, target_w), mode="bilinear", align_corners=False)
+        return aes_tensor
+
     def reset(self, eval_i=None, uniformSampling=False, to_pose=None):
         img, pos, done, aes_obs = self.env.reset(eval_i=eval_i, uniform=uniformSampling, to_pose=to_pose)
         del done
@@ -123,8 +133,7 @@ class UnrealZooDMCWrapper:
         t = np.array([0.0], dtype=np.float32)
         action = np.zeros(self.action_spec.shape, dtype=np.float32)
         reward = 0.0
-        aes_obs = self.env._to_hwc_image(aes_obs)
-        aes_tensor = torch.from_numpy(aes_obs).float().unsqueeze(0).permute(0, 3, 1, 2) / 255.0
+        aes_tensor = self._make_aes_tensor(aes_obs)
         ts = ExtendedTimeStep(StepType.FIRST, reward, self.discount, img, pos.astype(np.float32), action, t=t, aes_obs=aes_tensor)
 
         history = None
@@ -141,8 +150,7 @@ class UnrealZooDMCWrapper:
         img = np.moveaxis(img, -1, 0)
         t = np.array([self.env.t / self.max_timestep], dtype=np.float32)
         step_type = StepType.LAST if done else StepType.MID
-        aes_obs = self.env._to_hwc_image(aes_obs)
-        aes_tensor = torch.from_numpy(aes_obs).float().unsqueeze(0).permute(0, 3, 1, 2) / 255.0
+        aes_tensor = self._make_aes_tensor(aes_obs)
         _, reward = self.aesthetics_model(aes_tensor, np.zeros((3,), dtype=np.float32), done)
         reward = float(reward)
         discount = 0.0 if done else self.discount
