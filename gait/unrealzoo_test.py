@@ -7,6 +7,7 @@ import numpy as np
 import torch
 from dm_env import specs, StepType
 
+from aesthetics_model import AestheticsModel
 from habitat_test import ExtendedTimeStep, Runner, AsyncRunners, make_async_runners
 
 
@@ -94,12 +95,15 @@ class UnrealZooDMCWrapper:
     """dm_env-like wrapper aligned with HabitatSimDMCWrapper outputs."""
 
     def __init__(self, cfg, scene_index=0, aesthetics_model=None):
-        del scene_index, aesthetics_model
+        del scene_index
         self.cfg = cfg
         self.env = UnrealZooGymWrapper(cfg)
         self.discount = cfg.discount
         self.pose_dim = cfg.pose_dim
         self.max_timestep = cfg.max_timestep
+        self.aesthetics_model = aesthetics_model if aesthetics_model is not None else AestheticsModel(
+            negative_reward=None, device=cfg.device
+        )
 
         self.observation_spec = specs.BoundedArray(cfg.state_dim, np.uint8, 0, 255, "observation")
         self.pose_spec = specs.Array((cfg.pose_dim,), np.float32, "pose")
@@ -137,10 +141,12 @@ class UnrealZooDMCWrapper:
         img = np.moveaxis(img, -1, 0)
         t = np.array([self.env.t / self.max_timestep], dtype=np.float32)
         step_type = StepType.LAST if done else StepType.MID
-        reward = 0.0
         aes_obs = self.env._to_hwc_image(aes_obs)
         aes_tensor = torch.from_numpy(aes_obs).float().unsqueeze(0).permute(0, 3, 1, 2) / 255.0
-        ts = ExtendedTimeStep(step_type, reward, self.discount, img, pos.astype(np.float32), action.astype(np.float32), t=t, aes_obs=aes_tensor)
+        _, reward = self.aesthetics_model(aes_tensor, np.zeros((3,), dtype=np.float32), done)
+        reward = float(reward)
+        discount = 0.0 if done else self.discount
+        ts = ExtendedTimeStep(step_type, reward, discount, img, pos.astype(np.float32), action.astype(np.float32), t=t, aes_obs=aes_tensor)
 
         history = None
         if self.use_context:
@@ -158,7 +164,8 @@ class MultiSceneWrapper:
 
     def __init__(self, cfg):
         self.cfg = cfg
-        self.envs = [UnrealZooDMCWrapper(cfg, i) for i in range(cfg.num_scenes)]
+        aesthetics_model = AestheticsModel(negative_reward=None, device=cfg.device)
+        self.envs = [UnrealZooDMCWrapper(cfg, i, aesthetics_model=aesthetics_model) for i in range(cfg.num_scenes)]
         self.observation_spec = self.envs[0].observation_spec
         self.pose_spec = self.envs[0].pose_spec
         self.t_spec = self.envs[0].t_spec
